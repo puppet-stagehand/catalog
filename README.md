@@ -183,7 +183,15 @@ tighten:
       `marquee-docs`, so a person approves each run that releases the signing
       key or the docs token.
 - [ ] **Main-only deployment branches**: restrict `marquee-publish` and
-      `marquee-docs` to the `main` branch.
+      `marquee-docs` to the `main` branch (custom branch policy `main`, no
+      tags). Unlike the rest of this list this is **not optional before the
+      first publish**: the `if:` in `publish.yml` only protects that file, and
+      without a deployment branch policy anyone with write access could push a
+      branch whose workflow names the environment and read its secrets. Set it
+      before any secret is added to an environment, and check it with
+      `gh api repos/puppet-stagehand/catalog/environments/marquee-publish --jq
+      .deployment_branch_policy` (and the same for `marquee-docs`): it must show
+      `custom_branch_policies: true` with only `main`.
 - [ ] **Admin-bypass review**: decide whether repository admins may bypass the
       environment's protection rules, and turn bypass off if not.
 - [ ] **Protected `main`** on this repository, requiring a pull request review

@@ -352,10 +352,32 @@ jobs:
             echo "src/data/marquee.json already matches the published index; no pull request needed"
             exit 0
           fi
-          open="$(gh pr list --repo "$DOCS_REPO" --head "$branch" --state open --json number --jq 'length')"
-          if [ "$open" != "0" ]; then
-            echo "a pull request for ${branch} is already open"
+          # The branch name is predictable, so anyone who can open a pull request
+          # in the docs repository could pre-open one with this head. Only a pull
+          # request from this repository's own branch, opened by the token's own
+          # account, counts as ours; anything else stops the job.
+          me="$(gh api user --jq '.login')"
+          existing="$(gh pr list --repo "$DOCS_REPO" --head "$branch" --state open \
+            --json number,isCrossRepository,author)"
+          foreign="$(jq --arg me "$me" '[.[] | select((.isCrossRepository == false and .author.login == $me) | not)] | length' <<<"$existing")"
+          if [ "$foreign" != "0" ]; then
+            echo "an open pull request with head ${branch} in ${DOCS_REPO} was not opened by ${me} from this repository's own branch: refusing to continue" >&2
+            exit 1
+          fi
+          if [ "$(jq 'length' <<<"$existing")" != "0" ]; then
+            echo "our pull request for ${branch} is already open"
             exit 0
+          fi
+          lookup=0
+          git -c credential.helper= -c credential.helper='!gh auth git-credential' \
+            ls-remote --exit-code --heads origin "refs/heads/${branch}" >/dev/null 2>&1 || lookup=$?
+          if [ "$lookup" = "0" ]; then
+            echo "branch ${branch} already exists in ${DOCS_REPO} without our open pull request: refusing to push over it" >&2
+            exit 1
+          fi
+          if [ "$lookup" != "2" ]; then
+            echo "could not check whether branch ${branch} exists in ${DOCS_REPO} (git exit ${lookup})" >&2
+            exit 1
           fi
           base="$(gh repo view "$DOCS_REPO" --json defaultBranchRef --jq '.defaultBranchRef.name')"
           git checkout -b "$branch"
@@ -379,8 +401,8 @@ jobs:
             --title "Marquee: catalog ${TAG}" --body-file "$body")"
           echo "opened ${new_url}"
           echo "docs pull request: ${new_url}" >> "$GITHUB_STEP_SUMMARY"
-          gh pr list --repo "$DOCS_REPO" --state open --json number,headRefName \
-            | jq -r --arg keep "$branch" '.[] | select((.headRefName | startswith("marquee/")) and .headRefName != $keep) | .number' \
+          gh pr list --repo "$DOCS_REPO" --state open --json number,headRefName,isCrossRepository,author \
+            | jq -r --arg keep "$branch" --arg me "$me" '.[] | select((.headRefName | startswith("marquee/")) and .headRefName != $keep and .isCrossRepository == false and .author.login == $me) | .number' \
             > superseded.txt
           while IFS= read -r number; do
             gh pr close "$number" --repo "$DOCS_REPO" --delete-branch \
