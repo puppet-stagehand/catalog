@@ -1,0 +1,23 @@
+# The reviewed list of what the Stagehand Marquee feed publishes.
+#
+# This file is the only thing people edit. It lists, for each pack, which
+# versions are offered and which unsigned candidate image (pinned by digest)
+# each one comes from. A pack's name, publisher, tier, licence, summary and
+# permissions are NOT typed here: `expansion-index build` reads them from the
+# manifest inside each candidate image so this list can never disagree with it.
+#
+# Feed display name: Stagehand Marquee. (catalog.yaml format 1 has no name
+# field; the tool stamps the feed key below into the index.)
+format: 1
+feeds:
+  free:
+    index: ghcr.io/puppet-stagehand/catalog
+    images: ghcr.io/puppet-stagehand/packs
+    visibility: public
+packs:
+  - id: puppet_observability
+    feed: free
+    versions:
+      - version: 0.1.0
+        candidate: ghcr.io/puppetlabs/stagehand-pack-puppet-observability@sha256:c65e78f0e05116e903263d7be4ecd749a69a98f01cce4229e3ee0665e467a2e5
+        released_at: 2026-10-09
