@@ -141,30 +141,35 @@ Signing flags (consoles verify the older legacy format, so these are required):
 
 ## First publish of the feed or of a new pack id
 
-GitHub Container Registry (GHCR) creates every new package **private**, and a
-package can only be made public from the web page. So the first publish of the
-feed, and the first publish of every new pack id (a new pack is a new package),
-is expected to stop part way and be repeated once:
+A package that this repository's workflow creates in GitHub Container Registry
+(GHCR) is linked to this repository and takes its visibility. This repository
+is public, so `ghcr.io/puppet-stagehand/catalog` and every
+`ghcr.io/puppet-stagehand/packs/<id>` are created **public**, and the first
+publish of the feed or of a new pack id runs straight through. This was
+observed on the very first publish (run 38052680439, 2026-10-10): the build
+step summary showed `previous: not_found`, both packages were created public,
+and the anonymous verify and the promote succeeded in the same run.
 
-1. Merge the change. The first run copies the candidate and creates
-   `ghcr.io/puppet-stagehand/packs/<id>` and (the first time ever)
-   `ghcr.io/puppet-stagehand/catalog` as **private** packages, signs them, and
-   then **stops at the anonymous verify**, because an anonymous pull of a
-   private package is refused. `latest` is not moved. This is the expected
-   outcome. The build step summary shows `previous: not_found`.
-2. Make each new package public: GitHub organisation `puppet-stagehand` ->
-   Packages -> the package -> Package settings -> Change visibility -> Public
-   (this cannot be undone). In the same page, under **Manage Actions access**,
-   check that `puppet-stagehand/catalog` has **Write**; without it later runs
-   are refused on a package that is not linked to this repository.
-3. Re-run the workflow (`gh workflow run publish.yml --repo
-   puppet-stagehand/catalog --ref main`). The previous read still says not
-   found (there is no `latest` yet), `copy` writes nothing new (the digest is
-   already present), signing the same digest again adds a second signature layer
-   by the same key (consoles check each layer, so it still verifies), and the
-   anonymous verify, the promote and the docs job now succeed.
-4. From the first promoted index on, `build` finds the previous index, and
+After the first publish of a new pack id, check the new package once:
+
+1. GitHub organisation `puppet-stagehand` -> Packages -> the package: it shows
+   **Public** and is linked to `puppet-stagehand/catalog`.
+2. Package settings -> **Manage Actions access**: `puppet-stagehand/catalog`
+   has **Write**. Without it later runs are refused on that package.
+3. From the first promoted index on, `build` finds the previous index, and
    images already listed are never copied or signed again.
+
+If a new package is ever created **private** (for example because the
+organisation's package creation settings changed, or the package already
+existed before this repository's workflow first pushed to it), the run stops
+at the anonymous verify, because an anonymous pull of a private package is
+refused, and `latest` is not moved. Then make the package public (Package
+settings -> Change visibility -> Public; this cannot be undone), check
+Manage Actions access as above, and re-run the workflow
+(`gh workflow run publish.yml --repo puppet-stagehand/catalog --ref main`).
+On the re-run `copy` writes nothing new (the digest is already present), and
+signing the same digest again adds a second signature layer by the same key
+(consoles check each layer, so it still verifies).
 
 If the build step fails with a `previous_denied` finding, **do not work around
 it**. A denied read of the previous index (an HTTP 401 or 403 on an existing
