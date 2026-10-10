@@ -1,0 +1,120 @@
+name: validate
+
+# Secret-free validation of every change. This workflow has read-only
+# permissions, names no environment and reads no secret, so it is safe to run
+# for pull requests from forks. Signing and publishing are in publish.yml.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  # The PUBLIC SDK commit expansion-index is built from (Phase 57 plan 57-07).
+  STAGEHAND_SDK_REF: 3f20688bb330e7a0f1488c7890f94b292e38a11e
+  MARQUEE_KEY_FINGERPRINT: sha256:48ba24e6f91da7ced7540b1512d0eac37b7fa070d474d28b9f8a89a0c5955242
+
+jobs:
+  tools:
+    name: Build expansion-index
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.sum.outputs.sha256 }}
+    steps:
+      - name: Check out the public SDK at the pinned commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: puppet-stagehand/stagehand-sdk
+          ref: ${{ env.STAGEHAND_SDK_REF }}
+          path: stagehand-sdk
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: stagehand-sdk/cmd/expansion-index/go.mod
+          cache: false
+
+      - name: Build expansion-index
+        working-directory: stagehand-sdk/cmd/expansion-index
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          go build -trimpath -o "$GITHUB_WORKSPACE/out/expansion-index" .
+
+      - name: Record the checksum
+        id: sum
+        working-directory: out
+        run: |
+          set -euo pipefail
+          sha256sum expansion-index | cut -d' ' -f1 > expansion-index.sha256
+          echo "sha256=$(cat expansion-index.sha256)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the tool
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: expansion-index
+          path: |
+            out/expansion-index
+            out/expansion-index.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  validate:
+    name: Validate catalog
+    needs: tools
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the SDK commit the schema copy came from
+        id: source
+        run: |
+          set -euo pipefail
+          commit="$(sed -n 's/^commit: *//p' schema/SOURCE | head -n 1)"
+          if ! [[ "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "schema/SOURCE does not name a 40 hex character commit" >&2
+            exit 1
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the SDK at the schema source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: puppet-stagehand/stagehand-sdk
+          ref: ${{ steps.source.outputs.commit }}
+          path: stagehand-sdk-schema
+          persist-credentials: false
+
+      - name: Download the tool
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: expansion-index
+          path: tool
+
+      - name: Check the tool checksum
+        env:
+          EXPECTED_SHA256: ${{ needs.tools.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          actual="$(sha256sum tool/expansion-index | cut -d' ' -f1)"
+          if [ -z "$EXPECTED_SHA256" ] || [ "$actual" != "$EXPECTED_SHA256" ]; then
+            echo "expansion-index checksum differs from the tools job: refusing to use it" >&2
+            exit 1
+          fi
+          chmod 0755 tool/expansion-index
+
+      - name: Validate catalog.yaml
+        run: ./tool/expansion-index build --check --catalog catalog.yaml --feed free
+
+      - name: Check the publisher key fingerprint
+        run: bash scripts/check-key.sh marquee-publisher-key.pub.pem
+
+      - name: Check the schema copy is byte-identical to the SDK's
+        run: cmp schema/index.schema.json stagehand-sdk-schema/schema/json/index.schema.json
