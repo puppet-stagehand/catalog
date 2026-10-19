@@ -13,8 +13,11 @@ permissions:
   contents: read
 
 env:
-  # The PUBLIC SDK commit expansion-index is built from (Phase 57 plan 57-07).
-  STAGEHAND_SDK_REF: 3f20688bb330e7a0f1488c7890f94b292e38a11e
+  # The PUBLIC SDK commit expansion-index is built from (Phase 57 plan 57-07;
+  # moved to the public SDK main d6c43e9 in Phase 57.6 plan 57.6-19, whose
+  # manifest validation knows access.permission, instances:read and
+  # network:egress; cmd/expansion-index and the index schema are unchanged).
+  STAGEHAND_SDK_REF: d6c43e952f2566ca2d7b377aa7e192f42d8ab35a
   MARQUEE_KEY_FINGERPRINT: sha256:48ba24e6f91da7ced7540b1512d0eac37b7fa070d474d28b9f8a89a0c5955242
 
 jobs:
