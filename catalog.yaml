@@ -21,3 +21,9 @@ packs:
       - version: 0.1.0
         candidate: ghcr.io/puppetlabs/stagehand-pack-puppet-observability@sha256:c65e78f0e05116e903263d7be4ecd749a69a98f01cce4229e3ee0665e467a2e5
         released_at: 2026-10-09
+  - id: code_manager
+    feed: free
+    versions:
+      - version: 0.1.0
+        candidate: ghcr.io/puppetlabs/stagehand-pack-code-manager@sha256:995d611df7c0c09437da21080cf3b57f86cde95fd2a75889b4a608b19868e32b
+        released_at: 2026-10-19
