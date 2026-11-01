@@ -76,6 +76,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Test docs publication ordering and retries
+        run: python3 scripts/test_publish_docs.py
+
       - name: Read the SDK commit the schema copy came from
         id: source
         run: |

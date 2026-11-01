@@ -1,0 +1,8 @@
+# Solo-owner mode: ownership is explicit; independent required approval is
+# enabled when a second operator joins (see README, D-24).
+/.github/CODEOWNERS @matthewrstone
+/.github/workflows/ @matthewrstone
+/scripts/ @matthewrstone
+/schema/ @matthewrstone
+/marquee-publisher-key.pub.pem @matthewrstone
+/catalog.yaml @matthewrstone
