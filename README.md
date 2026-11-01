@@ -111,16 +111,17 @@ version is not designed yet.
 `.github/workflows/validate.yml` runs on every pull request and on pushes to
 `main`. It has read-only permissions, no environment and no secrets. It builds
 `expansion-index` from the public SDK at a pinned commit and runs
-`expansion-index build --check`, the key fingerprint check, and the schema
-byte comparison.
+`expansion-index build --check`, the key fingerprint check, the schema
+byte comparison, and the docs publication ordering and retry tests.
 
 `.github/workflows/publish.yml` runs only on a push to `main` that changes
-`catalog.yaml`, or on manual dispatch. It has three jobs:
+`catalog.yaml`, or on manual dispatch. The whole workflow shares concurrency
+group `marquee-publish` with cancellation disabled: signing, promotion, and
+the matching docs update run in order. It has three jobs:
 
 1. `tools` builds `expansion-index` with no environment and no secrets, and
    records its sha256.
-2. `publish` (environment `marquee-publish`, concurrency group
-   `marquee-publish`, never cancelled mid-run, only on `refs/heads/main` and
+2. `publish` (environment `marquee-publish`, only on `refs/heads/main` and
    never on a pull request) refuses a tool whose checksum differs, then:
    validates every candidate by running `build` (reading the previous index
    with the job token); for each image the build says is not yet listed, copies
@@ -133,6 +134,24 @@ byte comparison.
    verified into the Marquee page data and opens or updates one pull request
    in `puppet-stagehand/docs` that a person merges. The signing key is never
    in this job and the docs token is never in the signing job.
+
+The docs job refuses to propose older data when docs `main` already has a
+newer listing or a newer, publisher-owned Marquee PR is open. It closes only
+older timestamp-named PRs from the same repository and publisher. A retry
+after pushing a branch but failing to open its PR can recover that branch
+only when it has the exact verified listing, changes just the listing file,
+and has the expected generated commit identity and a base on docs `main`.
+It never overwrites an existing branch. Foreign PRs and mismatched branches
+remain hard failures.
+
+Run the secret-free local regression suite with:
+
+```bash
+python3 scripts/test_publish_docs.py
+```
+
+It uses disposable local Git repositories and a GitHub CLI boundary double;
+it neither signs nor publishes anything and needs no token.
 
 Signing flags (consoles verify the older legacy format, so these are required):
 `cosign sign --key env://COSIGN_PRIVATE_KEY --new-bundle-format=false
@@ -179,30 +198,33 @@ it, fix the credentials or the package's Actions access, and re-run.
 
 ## Before the production release (D-24)
 
-Hardening is deliberately deferred until just before the production release. It
-is listed here so it is not forgotten, and it is also an item on the release
-gate checklist. Nothing here has been weakened; these are the things still to
-tighten:
+The following controls were verified on 2026-11-01. The repository currently
+has one operator, `@matthewrstone`. The owner explicitly chose solo-owner
+mode: every change still goes through a PR and required GitHub Actions
+checks, but no independent PR approval is required because the author cannot
+approve their own PR. Both environments require explicit approval by that
+operator and permit self-review so manually dispatched releases can proceed.
+This is a recorded single-person approval boundary. Add a second reviewer
+and disallow self-review when another operator joins.
 
-- [ ] **Required reviewers** on the `marquee-publish` environment, and on
-      `marquee-docs`, so a person approves each run that releases the signing
-      key or the docs token.
-- [ ] **Main-only deployment branches**: restrict `marquee-publish` and
-      `marquee-docs` to the `main` branch (custom branch policy `main`, no
-      tags). Unlike the rest of this list this is **not optional before the
-      first publish**: the `if:` in `publish.yml` only protects that file, and
-      without a deployment branch policy anyone with write access could push a
-      branch whose workflow names the environment and read its secrets. Set it
-      before any secret is added to an environment, and check it with
+- [x] **Required reviewers**: `matthewrstone` on both `marquee-publish` and
+      `marquee-docs`; environment self-review is allowed in solo-owner mode.
+- [x] **Main-only deployment branches**: both environments use custom branch
+      policy `main`, type branch, with no tags. Check it with
       `gh api repos/puppet-stagehand/catalog/environments/marquee-publish --jq
       .deployment_branch_policy` (and the same for `marquee-docs`): it must show
       `custom_branch_policies: true` with only `main`.
-- [ ] **Admin-bypass review**: decide whether repository admins may bypass the
-      environment's protection rules, and turn bypass off if not.
-- [ ] **Protected `main`** on this repository, requiring a pull request review
-      and the `validate` check before merge.
-- [ ] **CODEOWNERS on `.github/workflows`** so a workflow change needs an owner
-      review.
+- [x] **Admin bypass disabled** for both environments; repository branch
+      protection also applies to administrators.
+- [x] **Protected `main`** requires a PR, resolved conversations, and the
+      `Build expansion-index` and `Validate catalog` checks from GitHub
+      Actions (app 15368), with the branch up to date. Forced pushes and
+      branch deletion are prohibited. Required approving reviews: zero,
+      explicitly for solo-owner mode.
+- [x] **CODEOWNERS** assigns workflows, scripts, schema, key, catalog, and
+      the ownership file itself to `@matthewrstone`. It records who owns
+      sensitive changes; required owner approval is not enabled in solo-owner
+      mode and this file does not imply an independent second review.
 - [ ] **GHCR package visibility and Actions-access review**: confirm `catalog`
       and `packs/*` are public as intended, that only this repository has Write
       under Manage Actions access, and that no stale package is linked.
@@ -232,5 +254,8 @@ later work.
 | `marquee-publisher-key.pub.pem` | The public key consoles trust. |
 | `schema/index.schema.json`, `schema/SOURCE` | Pinned copy of the index schema and the SDK commit it came from. |
 | `scripts/check-key.sh` | Prints and checks the key fingerprint. |
+| `scripts/publish-docs.py` | Ordered, retry-safe docs pull requests from verified listing data. |
+| `scripts/test_publish_docs.py` | Secret-free real-Git regression tests for docs publication. |
+| `.github/CODEOWNERS` | Explicit ownership of release-sensitive paths. |
 | `.github/workflows/validate.yml` | Secret-free validation of every change. |
 | `.github/workflows/publish.yml` | The environment-gated sign and publish workflow. |
