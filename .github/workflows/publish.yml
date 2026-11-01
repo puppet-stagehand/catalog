@@ -22,7 +22,7 @@ env:
   # network:egress; cmd/expansion-index and the index schema are unchanged).
   STAGEHAND_SDK_REF: d6c43e952f2566ca2d7b377aa7e192f42d8ab35a
   INDEX_REF: oci://ghcr.io/puppet-stagehand/catalog
-  DOCS_REPO: puppetlabs/stagehand-docs
+  DOCS_REPO: puppet-stagehand/docs
 
 jobs:
   tools:
@@ -326,7 +326,7 @@ jobs:
       - name: Check out the docs repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: puppetlabs/stagehand-docs
+          repository: ${{ env.DOCS_REPO }}
           token: ${{ secrets.DOCS_PR_TOKEN }}
           path: stagehand-docs
           persist-credentials: false

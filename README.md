@@ -131,7 +131,7 @@ byte comparison.
 3. `docs` (environment `marquee-docs`, which holds only the token that may open
    a pull request in the docs repository) turns the index that was just
    verified into the Marquee page data and opens or updates one pull request
-   in `puppetlabs/stagehand-docs` that a person merges. The signing key is never
+   in `puppet-stagehand/docs` that a person merges. The signing key is never
    in this job and the docs token is never in the signing job.
 
 Signing flags (consoles verify the older legacy format, so these are required):
@@ -212,7 +212,7 @@ tighten:
       `marquee-publish`.
 - [ ] **Docs token review**: `DOCS_PR_TOKEN` is a fine-grained token for the docs
       repository only (Contents and Pull requests), authorised for the
-      `puppetlabs` organisation (which enforces SAML single sign-on); confirm
+      `puppet-stagehand` organisation; confirm
       its owner and expiry.
 - [ ] **Interim key replacement**: replace the interim Marquee signing key with
       the production key held in the production key custody (this changes the
